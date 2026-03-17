@@ -1,0 +1,128 @@
+when i faced this problem at first, I thought a naive solution
+but this is not avilable because the number of states is too large.(exponential time complexity)
+so, compression of states is required.
+and the number that we want to know is
+$|\{s_{1},s_{2} \cdots s_{k} | s_i < s_{i+1} \, and \,s_j \in \{arr\} \}|$
+by the set's cardinality rule, we can divide this set.
+by this intuition, i noticed that to solve this problem, dp algorithm should be used to compress state.
+then, dp recurrence relation is : 
+$dp[k][idx]$ := number of increasing sequnce starting with A_idx and there are k numbers after A_idx.
+
+with this definition, making recurrence relation is so easy.
+$dp[k][idx1] :=  \sum{dp[k-1][idx2]} \, s.t. \,A_{idx2} > A_{idx1} \, and \,\, idx2>idx1$
+I was very happy because I thought solved this problem at this moment, but there is very serious problem.
+
+problem : but how can we compute that sum?
+with segment tree, range sum can be computed at $O(\log{N})$ time, but the increasing condition make this hard.
+so, I tried to find any method to calculate this "thres hold" function, but this function is not continuous, we can't compute it with lazy segment tree.
+
+but at this time, i intuitively noticed there is a pattern similar to 'offline query' in this sum query.
+so, we can calculate sum function from the largest, left sided number! so the algorithm will be 
+sort $0,1,2, \cdots n-1 $ with this compare function
+
+$func$ : cmp (int i, int j):
+    if A_i != A_j then return A_i > A_j
+    (larger number first)
+    else return i<j
+    (if the numbers are same, return lower index)
+
+but there's one thing that i overlooked...
+in this problem, the subsequences that have same components **are same** (so count them as just one)
+
+so, i retried to think : how can we count all cases without overlapping?
+at first, i tried to pre process the input, but anyway this preprocessing requires quadratic time so it is not capable. (I thought I find a very fantastic algorithm before i notice time complexity of this algorithm lol)
+
+i returned to independent set separation.
+to separate a set independently without losing topological structure, I intuitively made an algorithm
+
+let's think dp[k][idx] is the number of subsequence, but add one range condition. 
+dp[k][idx] counts the number of case 
+from idx and idx2-1 and lets call idx2 is the lowest index such that A_idx = A_idx2 if it doesn't exist, then it will be n-1(last index)
+
+dramatically, this condition enable us to count all cases without overlapping
+
+proof:
+for the process calculating dp[k][i] will consider all possible case 
+because if A_i = A_j = A_k ... and i<j<k... holds,
+by our previous definition of dp without range constraint, and thinking set(dp) as a set of all states on dp,
+$set(dp[step][k]) \subset set(dp[step][j]) \subset set(dp[step][i])$
+so all sets (A_i - A_j) and (A_j - A_k) (and so on) (that we redefined ) is independent.
+then, how about uniqueness? we can prove this by using proof by induction method.
+iterating the sorted index, for all previous indices that pointing same value A , assume that there is no overlapping subsequence that dp[k][all indices] representing. then, clearly current index's dp table also will not have any overlapping subsequences(state)
+
+and by keeping dp update rule, this is always true.
+here is implemneted code.
+
+[code : BOJ 13556] 
+```cpp
+#include<bits/stdc++.h>
+
+using namespace std;
+
+int dp[50][262144];
+int a[100001];
+int p =5000000;
+
+int sum(int n,int l,int r){
+    l+= 131072; r+= 131072;
+    if(l>r) return 0;
+    if(l==r) return dp[n][l];
+    int ans = 0;
+    for(;l<=r;l>>=1,r>>=1){
+        if(l&1) ans = (ans+dp[n][l++])%p;
+        if(~r&1) ans = (ans+dp[n][r--])%p;
+    }
+    return ans;
+}
+
+void update(int n, int idx,int val){
+    //input idx 0~131071
+    idx+=131072;
+    int dif = (val - dp[n][idx]);
+    while(idx){
+        dp[n][idx] = (dp[n][idx] + dif)%p;
+        idx = idx/2;
+    }
+
+}
+
+bool cmp(int i,int j){
+    return a[i] != a[j] ? a[i]>a[j] : i<j;
+}
+
+int main(){
+    vector<int> index;
+    ios::sync_with_stdio(0);
+    cin.tie(NULL);
+    int n,k;
+
+    cin >> n >> k ;
+    for(int i=0;i<n;i++){
+        cin >> a[i];
+        index.push_back(i);
+    }
+    sort(index.begin(),index.end(),cmp);
+
+    int prev=100000;
+    for(auto i:index){
+
+        if(a[prev]==a[i]){
+            update(0,i,1);
+            update(0,prev,0);
+            for(int j=1;j<=k-1;j++){
+                update(j,i,sum(j-1,i+1,131071));
+                update(j,prev,(sum(j,prev,prev) - sum(j,i,i)));
+            }
+        }
+        else{
+            update(0,i,1);
+            for(int j=1;j<=k-1;j++){
+                update(j,i,sum(j-1,i+1,131071));
+            }
+        }
+        prev = i;
+    }
+    cout << (sum(k-1,0,131071)+p)%p << "\n";
+}
+```
+at first, I got TLE because vector's cache hit is worse than array. after replacing all vectors to array, I finally got AC!
