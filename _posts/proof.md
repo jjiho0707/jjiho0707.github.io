@@ -1,0 +1,269 @@
+recalling solving process of BOJ 2646
+
+at first, we should start from naive solution. I noticed this problem's naive solution is very huge graph search(backtracking)
+but **a few minuites later**, I thought this problem is greedy problem intuitively.
+from the largest number, make the solution anyway.
+but I found a tiny counter example.
+
+5,4,3,3,3,2
+answer : 5,3,2 and 4,3,3
+but my greedy algorithm : 5,4 ... and no solution
+
+(because greedy solution requires very heavy proof, I doubted this. before start proving)
+
+and this problem is clearly not a dp problem. because we should save whole state, not compressed.
+
+then, i go back to the start. the naive solution.
+because the upperbound of n is 50, at worst case this naive solution can have 50! time complexity.
+so, I tried to find a method reducing number of case.
+
+like dp algorithm, saving all possible number's solution is impossible because with n increasing, the number of possible numbers grows exponentially. 
+so, i tried to find O(1) condition to remove impossible cases as many as possible.
+here is very good idea. when we check whether a integer is possible to be made of given sequence or not, we can't assure the number can be made of sequence. but, **we can assure the integer is impossible in O(1) time if actually the integer is not constructable**, by adding all sequence, and compare it with that integer.
+okay, so by applying this mathmatical fact, we deleted so many branches that the algorithm should search before.
+but, only this fact can't prove that this improved backtracking can solve the problem in proper time.
+then, let's think conversely. **then how many cases that passed this sum condition will be constructable?**
+roughly thinking, when the length of sequence increasing, the number of constructable numbers grow exponentially.
+(consider **independent** sequence 1,2,4,8,16,32... this makes 2^n-1 integers!!!)
+if the integers in sequence are not independent, we can conjecture the combiantions of these number is very large.
+with this statistic intuition, i runned an simple experiment: 
+
+```cpp
+
+#include<bits/stdc++.h>
+using namespace std;
+typedef long long ll;
+int dp[100001];
+int arr[200];
+
+int main(){
+    vector<double> vals;
+    int iteration = 100;
+    int n = 18;
+    int max = 1000;
+    for(int iter=0;iter<iteration;iter++){
+        for(int i=0;i<100001;i++){
+            dp[i]=0;//init table
+        }
+
+        ll sum = 0;
+        srand(time(0));
+        for(int i=0;i<n;i++){
+            arr[i] = (rand()%max + 1); //make random array
+            sum+=arr[i];
+        }
+        int ans;
+
+        ll range1=1;
+        range1<<=(n+1);
+        ll range2=1;
+        range2<<=n;
+
+        for(ll i=1;i<range1;i++){
+            ans = 0;
+            for(ll j=1,bit=0;j<=range2;j<<=1,bit++){
+                ans +=((i&j)>0)*arr[bit];
+            }
+            dp[ans] = 1;
+        }
+
+        int cnt = 0;
+        for(int i=0;i<=(max*n+1);i++){
+            cnt += int(dp[i]==1);
+        }
+        double prop = double(cnt)/double(sum);
+
+        vals.push_back(prop);
+        cout << "iteration" << iter << " completed."<< "\n";
+    }
+
+    double mean = 0;
+    double stdv = 0;
+    for(int i=0;i<vals.size();i++){
+        mean = mean + vals[i];
+    }
+    mean /= vals.size();
+    for(int i=0;i<vals.size();i++){
+        stdv += ((double)vals[i]-mean)*((double)vals[i]-mean);
+    }
+    stdv/=vals.size();
+    stdv = sqrt(stdv);
+    double den = n*max;
+    cout << "mean : " << mean << "\n";
+    cout << "stdv : " << stdv << "\n";
+}
+```
+
+from n=10 to n=25, I observed the ratio of constructable number is increasing. (and 11 to 15 was a singular interval that probabilty creased very rapidly)
+results are as follows
+n = 10 : 24%
+11 :  27%
+12 : 41%
+13 : 54%
+14 : 63%
+15 : 73%
+16 : 72%
+17 : 78%
+...
+20 : 83%
+25 : 92%
+
+wow. this means if a case passed that range of summation condition, with 92% probability that case can be constructable.
+so, this algorithm tries averagely 1.2 or 1.3 searches to dig down one node at graph, this makes time complexity of O(1.3^50) 
+approx to 497929. this is clearly smaller than 10^8, so this improved algorithm can find solution in proper time!!
+
+implementation is not hard.(i haved some trouble making custom frequency set class)
+here is solution code.
+```cpp
+#include<bits/stdc++.h>
+using namespace std;
+
+vector<int> sol;
+int d;
+
+class dupset{
+    public:
+        int numbers[51] = {0};
+        int quantity[1001] = {0};
+        int maxptr;
+        int insertptr = 1;
+
+        void insert(int i){
+
+            if(quantity[i]){
+                quantity[i]++;
+            }
+            else{
+                numbers[insertptr++] = i;
+                quantity[i]++;
+            }
+        }
+
+        void align(){
+            maxptr = (insertptr-1);
+            sort(numbers+1,numbers+maxptr+1);
+        }
+        
+        int sum(int p = -1){
+            if(p == -1) p = maxptr;
+
+            int ans = 0;
+            for(;p;p--){
+                ans += quantity[numbers[p]]*numbers[p];
+            }
+            return ans;
+        }
+        int count(int trg){
+            return quantity[trg];
+        }
+        void use(int s){
+            if(!quantity[s]){
+                exit(139);
+            }
+            quantity[s] -=1;
+        }
+        void unuse(int s){
+            quantity[s] += 1;
+        }
+
+        int operator[](int idx){
+            return numbers[idx];
+        }
+        void print(){
+            for(int i=1;i<=maxptr;i++){
+                cout << quantity[numbers[i]] << " ";
+            }
+            cout << "\n";
+            return;
+        }
+};
+
+dupset st;
+
+
+bool dfs(int s,int trg, int p){
+    //cout << s << " " << trg << " " << p<< "\n";
+    //cout << "set state: ";
+    //st.print();
+
+    
+    if(s>trg or st.count(s) == 0 or st.sum(p)< trg ){
+        return false;
+    }
+
+    st.use(s);
+
+    if(s==trg){
+        if(st.sum()==0){
+            sol.push_back(s);
+            return true;
+        }
+        else{
+            bool q = false;
+            p = st.maxptr;
+            for(;p;p--){
+                if(st.count(st[p])) break;
+            }
+
+            q = (q||dfs(st[p],d,p));
+            
+            if(q){
+                sol.push_back(s);
+                return true;
+            }
+            else{
+                st.unuse(s);
+                return false;
+            }
+
+        }
+    }
+
+    if(s<trg){
+        bool q= false;
+        for(;p;p--){
+            q = (q||dfs(st[p],(trg-s),p));
+        }
+        if(q){
+            sol.push_back(s);
+            return true;
+        }
+        else{
+            st.unuse(s);
+            return false;
+        }
+    }
+    return false;
+}
+
+
+int main(){
+    int n,tmp;
+    cin >> n;
+    for(int i=0;i<n;i++){
+        cin >> tmp;
+        st.insert(tmp);
+    }
+    st.align();
+
+
+    n = st.sum();
+
+
+    for(d=st[st.maxptr];d<=n;d++){
+        if(n%d==0){
+            if(dfs(st[st.maxptr],d,st.maxptr)){
+                cout << d << "\n";
+                int agr = 0;
+                for(auto i:sol){
+
+                    agr += i;
+                    cout << i << " ";
+                    if(agr%d==0) cout << "\n";
+                }
+            }
+        }
+    }
+        
+}
+```
